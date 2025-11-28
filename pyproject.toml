@@ -22,4 +22,5 @@ dependencies = [
     "seaborn",
     "lxml-html-clean",
     "pyyaml>=6.0.3",
+    "peewee",
 ]
