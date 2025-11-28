@@ -1,0 +1,24 @@
+[project]
+name = "stock-market-prediction"
+version = "0.1.0"
+description = "Stock market prediction using LSTM, ARIMA, and GCN models"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pandas",
+    "numpy",
+    "pymongo",
+    "yahoo-fin",
+    "yfinance",
+    "openpyxl",
+    "scikit-learn",
+    "tensorflow",
+    "torch",
+    "statsmodels",
+    "matplotlib",
+    "requests-html",
+    "pyppeteer",
+    "pmdarima",
+    "seaborn",
+    "lxml_html_clean",
+]

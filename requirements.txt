@@ -1,0 +1,16 @@
+pandas
+numpy
+pymongo
+yahoo_fin
+yfinance
+openpyxl
+scikit-learn
+tensorflow
+torch
+statsmodels
+matplotlib
+requests_html
+pyppeteer
+pmdarima
+seaborn
+lxml_html_clean
