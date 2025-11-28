@@ -102,6 +102,31 @@ const SeriesChart = ({ selectedName, selectedInterval, visibilityState, onToggle
     fetchStockData();
   }, [selectedName, selectedInterval, validateAndSortData]);
 
+  // Helper function to get start timestamp based on interval
+  const getStartDateTimestamp = (interval) => {
+    const now = new Date();
+    switch (interval.toLowerCase()) {
+      case '1day':
+        now.setDate(now.getDate() - 2);
+        break;
+      case '1week':
+        now.setDate(now.getDate() - 7);
+        break;
+      case '1month':
+        now.setMonth(now.getMonth() - 1);
+        break;
+      case '1year':
+        now.setFullYear(now.getFullYear() - 1);
+        break;
+      case '5years':
+        now.setFullYear(now.getFullYear() - 5);
+        break;
+      default:
+        now.setFullYear(now.getFullYear() - 1);
+    }
+    return Math.floor(now.getTime() / 1000);
+  };
+
   // Fetch prediction data
   useEffect(() => {
     const fetchPredictionData = async () => {
@@ -119,7 +144,12 @@ const SeriesChart = ({ selectedName, selectedInterval, visibilityState, onToggle
             const rawData = await response.json();
             
             if (Array.isArray(rawData)) {
-              const sortedData = validateAndSortData(rawData, name);
+              let sortedData = validateAndSortData(rawData, name);
+              
+              // Filter data based on selected interval
+              const startTime = getStartDateTimestamp(selectedInterval);
+              sortedData = sortedData.filter(item => item.time >= startTime);
+              
               setter(sortedData);
             } else {
               console.error(`Invalid data structure from ${url}:`, rawData);
@@ -191,17 +221,20 @@ const SeriesChart = ({ selectedName, selectedInterval, visibilityState, onToggle
     const arimaSeries = chart.addLineSeries({ 
       color: 'orange', 
       lineWidth: 3,
-      title: 'ARIMA'
+      title: 'ARIMA',
+      visible: visibilityState.arima
     });
     const lstmSeries = chart.addLineSeries({ 
       color: 'blue', 
       lineWidth: 3,
-      title: 'LSTM'
+      title: 'LSTM',
+      visible: visibilityState.lstm
     });
     const gcnSeries = chart.addLineSeries({ 
       color: 'brown', 
       lineWidth: 3,
-      title: 'GCN'
+      title: 'GCN',
+      visible: visibilityState.gcn
     });
     const boxjenkinsSeries = chart.addLineSeries({ 
       color: 'purple', 
