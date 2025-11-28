@@ -3,10 +3,11 @@ import os
 import pandas as pd
 from pymongo import MongoClient
 import yfinance as yf
+from config.loader import config
 
 # Connect to MongoDB (local)
-client = MongoClient('mongodb://127.0.0.1:27017/')
-db = client['stocks']
+client = MongoClient(config['database']['uri'])
+db = client[config['database']['name']]
 
 
 def fetch_and_store_stocks(stock_names):
@@ -15,6 +16,8 @@ def fetch_and_store_stocks(stock_names):
     Each symbol is fetched as SYMBOL.NS and stored in a collection named SYMBOL.NS.
     """
     today = datetime.today()
+    start_date = config['data_fetching']['start_date']
+    suffix = config['data_fetching']['stock_suffix']
 
     for stock_name in stock_names:
         stock_name = str(stock_name).strip()
@@ -23,7 +26,7 @@ def fetch_and_store_stocks(stock_names):
 
         try:
             # Download historical data using yfinance
-            hist = yf.download(f"{stock_name}.NS", start="2018-01-01", end=today.strftime('%Y-%m-%d'), progress=False)
+            hist = yf.download(f"{stock_name}{suffix}", start=start_date, end=today.strftime('%Y-%m-%d'), progress=False)
 
             if hist is None or hist.empty:
                 print(f"No historical data for {stock_name}, skipping.")
@@ -31,13 +34,13 @@ def fetch_and_store_stocks(stock_names):
 
             # Sector info
             try:
-                ticker = yf.Ticker(f"{stock_name}.NS")
+                ticker = yf.Ticker(f"{stock_name}{suffix}")
                 info = getattr(ticker, 'info', {}) or {}
                 sector = info.get('sector') if isinstance(info, dict) else None
             except Exception:
                 sector = None
 
-            collection_name = f"{stock_name}.NS"
+            collection_name = f"{stock_name}{suffix}"
             hist = hist.reset_index()
 
             # Flatten MultiIndex if needed
@@ -71,5 +74,6 @@ if __name__ == "__main__":
         raise SystemExit(1)
 
     df = pd.read_excel(excel_path)
-    stock_names = df['Symbol'].dropna().astype(str).tolist()[:10]
+    max_stocks = config['data_fetching']['max_stocks_to_fetch']
+    stock_names = df['Symbol'].dropna().astype(str).tolist()[:max_stocks]
     fetch_and_store_stocks(stock_names)

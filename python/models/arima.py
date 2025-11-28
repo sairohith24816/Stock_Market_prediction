@@ -12,10 +12,11 @@ import numpy as np
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 from statsmodels.tsa.stattools import adfuller
+from config.loader import config
 
 # Connect to MongoDB
-client = pymongo.MongoClient("mongodb://localhost:27017/")
-db = client["stocks"]
+client = pymongo.MongoClient(config['database']['uri'])
+db = client[config['database']['name']]
 
 
 def generate_predictions(stock_data, ticker):
@@ -29,7 +30,10 @@ def generate_predictions(stock_data, ticker):
     stock_df.set_index('index', inplace=True)
     stock_df.dropna(inplace=True)
     
-    train_size = int(len(stock_data) * 4/5)  
+    arima_config = config['models']['arima']
+    train_split = arima_config['train_split_ratio']
+    
+    train_size = int(len(stock_data) * train_split)  
     train = stock_df[:train_size]
     train_resampled = train.resample('D').mean()
     train_filled = train_resampled.interpolate(method='linear')
@@ -43,7 +47,8 @@ def generate_predictions(stock_data, ticker):
     # Simple ARIMA model approach (without auto_arima due to compatibility issues)
     # Using a basic ARIMA(1,1,1) model for simplicity
     try:
-        model = ARIMA(train_filled['close'], order=(1, 1, 1))
+        order = tuple(arima_config['order'])
+        model = ARIMA(train_filled['close'], order=order)
         model_fit = model.fit()
         model_used_arima = True
 

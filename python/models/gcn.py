@@ -10,10 +10,11 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import pymongo
+from config.loader import config
 
 # Connect to MongoDB
-client = pymongo.MongoClient("mongodb://localhost:27017/")
-db = client["stocks"]
+client = pymongo.MongoClient(config['database']['uri'])
+db = client[config['database']['name']]
 
 # Define the GCN model
 class GCN(nn.Module):
@@ -68,7 +69,10 @@ def generate_predictions(stock_data, ticker):
     features = scaler.fit_transform(features)
     labels = scaler.fit_transform(labels)
 
-    X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, shuffle=False)
+    gcn_config = config['models']['gcn']
+    test_split = gcn_config['test_split']
+
+    X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=test_split, shuffle=False)
     adjacency_matrix_train = np.eye(len(X_train))
     adjacency_matrix_test = np.eye(len(X_test))
 
@@ -79,8 +83,8 @@ def generate_predictions(stock_data, ticker):
     adj_tensor_train = torch.FloatTensor(adjacency_matrix_train)
     adj_tensor_test = torch.FloatTensor(adjacency_matrix_test)
 
-    model = GCN(input_dim=1, hidden_dim=64, output_dim=1)
-    train_model(model, adj_tensor_train, features_train, labels_train)  # features = labels as we used only closed price
+    model = GCN(input_dim=1, hidden_dim=gcn_config['hidden_dim'], output_dim=1)
+    train_model(model, adj_tensor_train, features_train, labels_train, epochs=gcn_config['epochs'], lr=gcn_config['learning_rate'])  # features = labels as we used only closed price
 
     predicted_normalized = predict(model, adj_tensor_test, features_test)
     predicted_test = scaler.inverse_transform(predicted_normalized.numpy())

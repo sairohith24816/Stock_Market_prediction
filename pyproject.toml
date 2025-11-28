@@ -20,5 +20,6 @@ dependencies = [
     "pyppeteer",
     "pmdarima",
     "seaborn",
-    "lxml_html_clean",
+    "lxml-html-clean",
+    "pyyaml>=6.0.3",
 ]

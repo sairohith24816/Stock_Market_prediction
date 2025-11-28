@@ -10,10 +10,11 @@ from tensorflow.keras.layers import Dense, LSTM
 from tensorflow.keras.optimizers import Adam
 from sklearn.metrics import mean_squared_error
 import pymongo
+from config.loader import config
 
 # Connect to MongoDB
-client = pymongo.MongoClient("mongodb://localhost:27017/")
-db = client["stocks"]
+client = pymongo.MongoClient(config['database']['uri'])
+db = client[config['database']['name']]
 
 # Prepare data for LSTM
 def create_dataset(dataset, time_steps):
@@ -27,27 +28,29 @@ def create_dataset(dataset, time_steps):
 def train_model_with_steps(data, step):
     # Choose number of time steps for LSTM
     time_steps = step
+    
+    lstm_config = config['models']['lstm']
 
     # Create input sequences and labels
     X, y = create_dataset(data, time_steps)
 
     # Split data into training and validation sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=lstm_config['test_split'], shuffle=False)
 
     # Build LSTM model
     model = Sequential()
-    model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
-    model.add(LSTM(units=50, return_sequences=False))
+    model.add(LSTM(units=lstm_config['units'], return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
+    model.add(LSTM(units=lstm_config['units'], return_sequences=False))
     model.add(Dense(units=1))
 
     # adam optimizer with learning rate
-    adam = Adam(learning_rate=0.01)
+    adam = Adam(learning_rate=lstm_config['learning_rate'])
 
     # Compile model
     model.compile(optimizer=adam, loss='mean_squared_error')
 
     # Train model
-    model.fit(X_train, y_train, epochs=10, batch_size=32, verbose=0)
+    model.fit(X_train, y_train, epochs=lstm_config['epochs'], batch_size=lstm_config['batch_size'], verbose=0)
 
     # Evaluate model
     mse = model.evaluate(X_test, y_test, verbose=0)
@@ -70,25 +73,30 @@ def generate_predictions(stock_data, ticker):
     # Use 'Close' price
     closing_prices = stock_df['close'].values.reshape(-1, 1)
     final_data = scaler.fit_transform(closing_prices)
-    train_data, test_data, _, _ = train_test_split(final_data, final_data, test_size=0.2, shuffle=False)
+    
+    lstm_config = config['models']['lstm']
+    train_data, test_data, _, _ = train_test_split(final_data, final_data, test_size=lstm_config['test_split'], shuffle=False)
 
     # Iterate over different step values and find the best one (commented out in original)
     best_step = None
     best_mse = float('inf')
+    
+    lstm_config = config['models']['lstm']
+    time_steps = lstm_config['time_steps']
 
     # Train the final model with the best step value (original used step=1)
-    X_final, y_final = create_dataset(final_data, 1)
-    X_train_final, X_test_final, y_train_final, y_test_final = train_test_split(X_final, y_final, test_size=0.2, shuffle=False)
+    X_final, y_final = create_dataset(final_data, time_steps)
+    X_train_final, X_test_final, y_train_final, y_test_final = train_test_split(X_final, y_final, test_size=lstm_config['test_split'], shuffle=False)
 
     # adam optimizer with learning rate
-    adam = Adam(learning_rate=0.1)
+    adam = Adam(learning_rate=lstm_config['learning_rate'])
 
     final_model = Sequential()
-    final_model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train_final.shape[1], X_train_final.shape[2])))
-    final_model.add(LSTM(units=50, return_sequences=False))
+    final_model.add(LSTM(units=lstm_config['units'], return_sequences=True, input_shape=(X_train_final.shape[1], X_train_final.shape[2])))
+    final_model.add(LSTM(units=lstm_config['units'], return_sequences=False))
     final_model.add(Dense(units=1))
     final_model.compile(optimizer=adam, loss='mean_squared_error')
-    final_model.fit(X_train_final, y_train_final, epochs=100, batch_size=32, verbose=1)
+    final_model.fit(X_train_final, y_train_final, epochs=lstm_config['epochs'], batch_size=lstm_config['batch_size'], verbose=1)
 
     # Predictions
     y_pred_scaled = final_model.predict(X_test_final)
@@ -113,7 +121,7 @@ def generate_predictions(stock_data, ticker):
         pred_documents.append(pred_doc)
 
     # --- Added: iterative future prediction helper (auto-regressive) ---
-    def predict_future(final_model, scaler, stock_df, ticker, n_days=7, time_steps=1):
+    def predict_future(final_model, scaler, stock_df, ticker, n_days=7, time_steps=time_steps):
         """
         Predict next n_days using the trained final_model by rolling the last time_steps.
         Returns a list of prediction documents similar to pred_documents but marked with 'future': True.
@@ -180,10 +188,11 @@ if __name__ == "__main__":
         collection = db[collection_name]
         # Get current date
         current_date = datetime.now()
-        start_date = current_date - timedelta(days=5 * 365)
+        history_years = config['data_fetching']['prediction_history_years']
+        start_date = current_date - timedelta(days=history_years * 365)
         query = {'index': {'$gte': start_date}}
         stock_data = list(collection.find(query))
-        if len(stock_data) < 50:
+        if len(stock_data) < config['data_fetching']['min_data_points']:
             continue  # Skip to the next collection
         pred_docs = generate_predictions(stock_data, collection_name)
         pred_collection_name = f"{collection_name}_LSTM_predicted"

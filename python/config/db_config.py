@@ -1,9 +1,10 @@
 import pymongo
+from config.loader import config
 
 # MongoDB configuration
-MONGO_HOST = "localhost"
-MONGO_PORT = 27017
-MONGO_DB_NAME = "stocks"
+MONGO_HOST = config['database']['host']
+MONGO_PORT = config['database']['port']
+MONGO_DB_NAME = config['database']['name']
 
 def get_db_connection():
     """
@@ -12,7 +13,7 @@ def get_db_connection():
     Returns:
         db: MongoDB database object
     """
-    client = pymongo.MongoClient(f"mongodb://{MONGO_HOST}:{MONGO_PORT}/")
+    client = pymongo.MongoClient(config['database']['uri'])
     db = client[MONGO_DB_NAME]
     return db
 

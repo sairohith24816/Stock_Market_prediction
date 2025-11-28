@@ -18,6 +18,7 @@ import argparse
 import sys
 from datetime import datetime, timedelta
 from config.db_config import get_db_connection
+from config.loader import config
 from models import lstm, arima, gcn
 from utils.data_fetcher import fetch_and_store_stocks
 import pandas as pd
@@ -35,11 +36,12 @@ def run_lstm_predictions():
             
         collection = db[collection_name]
         current_date = datetime.now()
-        start_date = current_date - timedelta(days=5 * 365)
+        history_years = config['data_fetching']['prediction_history_years']
+        start_date = current_date - timedelta(days=history_years * 365)
         query = {'index': {'$gte': start_date}}
         stock_data = list(collection.find(query))
         
-        if len(stock_data) < 50:
+        if len(stock_data) < config['data_fetching']['min_data_points']:
             continue
             
         pred_docs = lstm.generate_predictions(stock_data, collection_name)
@@ -62,11 +64,12 @@ def run_arima_predictions():
             
         collection = db[collection_name]
         current_date = datetime.now()
-        start_date = current_date - timedelta(days=5 * 365)
+        history_years = config['data_fetching']['prediction_history_years']
+        start_date = current_date - timedelta(days=history_years * 365)
         query = {'index': {'$gte': start_date}}
         stock_data = list(collection.find(query))
         
-        if len(stock_data) < 50:
+        if len(stock_data) < config['data_fetching']['min_data_points']:
             continue
             
         pred_docs = arima.generate_predictions(stock_data, collection_name)
@@ -89,10 +92,11 @@ def run_gcn_predictions():
             
         collection = db[collection_name]
         current_date = datetime.now()
-        start_date = current_date - timedelta(days=5 * 365)
+        history_years = config['data_fetching']['prediction_history_years']
+        start_date = current_date - timedelta(days=history_years * 365)
         stock_data = list(collection.find({'index': {'$gte': start_date}}))
         
-        if len(stock_data) < 50:
+        if len(stock_data) < config['data_fetching']['min_data_points']:
             continue
             
         pred_docs = gcn.generate_predictions(stock_data, collection_name)
@@ -115,7 +119,8 @@ def fetch_stock_data():
         return
     
     df = pd.read_excel(excel_path)
-    stock_names = df['Symbol'].dropna().astype(str).tolist()[:10]
+    max_stocks = config['data_fetching']['max_stocks_to_fetch']
+    stock_names = df['Symbol'].dropna().astype(str).tolist()[:max_stocks]
     fetch_and_store_stocks(stock_names)
     print("Stock data fetching completed.")
 
