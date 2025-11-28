@@ -86,8 +86,13 @@ def generate_predictions(stock_data, ticker):
     model = GCN(input_dim=1, hidden_dim=gcn_config['hidden_dim'], output_dim=1)
     train_model(model, adj_tensor_train, features_train, labels_train, epochs=gcn_config['epochs'], lr=gcn_config['learning_rate'])  # features = labels as we used only closed price
 
+    # Predict on Test Set
     predicted_normalized = predict(model, adj_tensor_test, features_test)
     predicted_test = scaler.inverse_transform(predicted_normalized.numpy())
+    
+    # Predict on Training Set
+    predicted_train_normalized = predict(model, adj_tensor_train, features_train)
+    predicted_train = scaler.inverse_transform(predicted_train_normalized.numpy())
 
     test_dates = stock_df.index[-len(predicted_test):]
     actual_prices = stock_df['close'][-len(predicted_test):]
@@ -95,8 +100,28 @@ def generate_predictions(stock_data, ticker):
     mse = mean_squared_error(actual_prices, predicted_test)
     print("MSE:", mse)
 
-    pred_documents = [{'index': date.strftime("%Y-%m-%d"), 'close': float(pred), 'ticker': ticker, 'MSE': mse}
-                      for date, pred in zip(test_dates, predicted_test)]
+    pred_documents = []
+    
+    # Add Training Predictions
+    # Training data corresponds to the first part of stock_df
+    train_dates = stock_df.index[:len(predicted_train)]
+    
+    for date, pred in zip(train_dates, predicted_train):
+        pred_documents.append({
+            'index': date.strftime("%Y-%m-%d"),
+            'close': float(pred),
+            'ticker': ticker,
+            'MSE': mse # Using test MSE as general metric
+        })
+
+    # Add Test Predictions
+    for date, pred in zip(test_dates, predicted_test):
+        pred_documents.append({
+            'index': date.strftime("%Y-%m-%d"),
+            'close': float(pred),
+            'ticker': ticker,
+            'MSE': mse
+        })
 
     # --- Added: simple iterative future-prediction helper (auto-regressive on a single-node GCN) ---
     def predict_future_gcn(model, scaler, X_test, n_days=20, ticker=ticker):

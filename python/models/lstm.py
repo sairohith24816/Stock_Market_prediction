@@ -98,13 +98,36 @@ def generate_predictions(stock_data, ticker):
     final_model.compile(optimizer=adam, loss='mean_squared_error')
     final_model.fit(X_train_final, y_train_final, epochs=lstm_config['epochs'], batch_size=lstm_config['batch_size'], verbose=1)
 
-    # Predictions
+    # Predictions on Test Set
     y_pred_scaled = final_model.predict(X_test_final)
     y_pred = scaler.inverse_transform(y_pred_scaled)
+    
+    # Predictions on Training Set (In-Sample)
+    y_train_pred_scaled = final_model.predict(X_train_final)
+    y_train_pred = scaler.inverse_transform(y_train_pred_scaled)
 
     pred_documents = []
+    
+    # Add Training Predictions
+    # X_train_final corresponds to the first part of the data (minus time_steps)
+    # We need to align dates.
+    # The dataset creation drops the first 'time_steps' points.
+    # So X_train_final[0] corresponds to predicting index 'time_steps'.
+    
+    train_dates = stock_df.index[time_steps : time_steps + len(y_train_pred)]
+    
+    for i in range(len(y_train_pred)):
+        pred_doc = {
+            'index': train_dates[i].strftime("%Y-%m-%d"),
+            'close': float(y_train_pred[i]),
+            'ticker': ticker,
+            'MSE': 0.0 # Placeholder or calculate train MSE
+        }
+        pred_documents.append(pred_doc)
 
     # Get the dates from the index of the testing set
+    # Test set starts after train set.
+    # X_test_final starts at index: time_steps + len(y_train_pred)
     test_dates = stock_df.index[-len(y_pred):]
     actual_prices = stock_df.close[-len(y_pred):]
 

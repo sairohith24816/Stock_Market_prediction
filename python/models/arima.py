@@ -74,7 +74,36 @@ def generate_predictions(stock_data, ticker):
         model = ARIMA(y_train, order=model_auto.order)
         model_fit = model.fit()
 
-        # --- Rolling Forecast (Walk-Forward Validation) for Test Set ---
+        # --- 1. In-Sample Predictions (Training Set) ---
+        # Get fitted values (predicted log returns) for the training set
+        train_pred_log_ret = model_fit.fittedvalues
+        
+        # Reconstruct prices for training set
+        # We need the starting price. The first log return corresponds to index 1.
+        # price[t] = price[t-1] * exp(ret[t])
+        # For t=0 (first point of train), we don't have a prediction from differencing, 
+        # so we can just use the actual price or skip it.
+        
+        train_pred_prices = []
+        # The fittedvalues index matches y_train index
+        
+        # We need the price at t-1 for each t in y_train.
+        # y_train starts at index 1 of 'train' dataframe (because of diff).
+        # So for y_train[i], the previous price is train['close'].iloc[i] (since y_train is shifted by 1)
+        # Wait, y_train = log_close.diff(). So y_train.iloc[0] is log_close[1] - log_close[0].
+        # Its index is train.index[1].
+        
+        # To reconstruct: pred_price[i] = train['close'].iloc[i-1] * exp(pred_ret[i])
+        # This aligns with the "one-step-ahead" in-sample prediction nature.
+        
+        train_actuals_shifted = train['close'].shift(1).iloc[1:] # align with y_train
+        train_pred_log_ret_aligned = train_pred_log_ret # should match y_train length
+        
+        # If lengths differ slightly due to how statsmodels handles start, we align by index
+        common_index = train_actuals_shifted.index.intersection(train_pred_log_ret.index)
+        train_pred_prices_series = train_actuals_shifted.loc[common_index] * np.exp(train_pred_log_ret.loc[common_index])
+        
+        # --- 2. Rolling Forecast (Test Set) ---
         # We predict one step ahead, then "observe" the actual value, then predict next.
         # This is much more realistic for evaluating time-series models.
         
@@ -167,6 +196,17 @@ def generate_predictions(stock_data, ticker):
 
     # Build prediction documents
     pred_documents = []
+    
+    # Training period predictions (In-Sample)
+    for date, close_pred in train_pred_prices_series.items():
+        pred_doc = {
+            'index': date.strftime("%Y-%m-%d"),
+            'close': float(close_pred),
+            'ticker': ticker,
+            'MSE': mse, # Use test MSE as a general metric, or calculate train MSE if needed
+            'type': 'train' # Optional marker
+        }
+        pred_documents.append(pred_doc)
     
     # Test period predictions
     for date, close_pred in zip(test.index, pred_test):
