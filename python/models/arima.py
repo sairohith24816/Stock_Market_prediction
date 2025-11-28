@@ -173,7 +173,7 @@ def generate_predictions(stock_data, ticker):
         # For the future, we don't have actuals, so we must use the model's own predictions recursively
         # or simply use the standard forecast method from the end of the full dataset.
         
-        n_future_days = 10
+        n_future_days = config['data_fetching']['future_prediction_days']
         # Forecast from the end of the filtered model (which includes test data)
         ret_forecast_future = model_all_fit.forecast(steps=n_future_days)
         
@@ -187,8 +187,9 @@ def generate_predictions(stock_data, ticker):
         # Fallback: Simple Moving Average or Linear Trend on Log Prices
         # Here we use a simple drift based on recent history
         last_price = train['close'].iloc[-1]
+        n_future_days = config['data_fetching']['future_prediction_days']
         pred_test = pd.Series([last_price] * len(test), index=test.index)
-        pred_future = pd.Series([last_price] * 10) # Flat line fallback
+        pred_future = pd.Series([last_price] * n_future_days) # Flat line fallback
 
     # Compute MSE for the test predictions
     # Align indices for MSE calculation
@@ -221,7 +222,7 @@ def generate_predictions(stock_data, ticker):
     # Future predictions
     future_dates = pd.date_range(
         start=test.index[-1] + pd.tseries.offsets.BDay(1),
-        periods=10,
+        periods=n_future_days,
         freq='B',
     )
     

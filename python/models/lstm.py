@@ -191,8 +191,9 @@ def generate_predictions(stock_data, ticker):
             })
         return future_docs
 
-    # Generate next 7 calendar-day predictions and append them
-    future_predictions = predict_future(final_model, scaler, stock_df, ticker, n_days=7, time_steps=X_train_final.shape[1])
+    # Generate next n calendar-day predictions and append them
+    n_future_days = config['data_fetching']['future_prediction_days']
+    future_predictions = predict_future(final_model, scaler, stock_df, ticker, n_days=n_future_days, time_steps=X_train_final.shape[1])
     pred_documents.extend(future_predictions)
     # --- End added future-prediction code ---
 

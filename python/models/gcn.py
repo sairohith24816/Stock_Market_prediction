@@ -124,7 +124,7 @@ def generate_predictions(stock_data, ticker):
         })
 
     # --- Added: simple iterative future-prediction helper (auto-regressive on a single-node GCN) ---
-    def predict_future_gcn(model, scaler, X_test, n_days=20, ticker=ticker):
+    def predict_future_gcn(model, scaler, X_test, n_days, ticker=ticker):
         """
         Predict next n_days using the trained GCN by repeatedly feeding a single-node feature.
         It uses the last scaled feature from X_test as the input for all future steps (simple approach).
@@ -166,8 +166,9 @@ def generate_predictions(stock_data, ticker):
 
         return future_docs
 
-    # Generate next 7 calendar-day predictions and append them
-    future_predictions = predict_future_gcn(model, scaler, X_test, n_days=20, ticker=ticker)
+    # Generate next n calendar-day predictions and append them
+    n_future_days = config['data_fetching']['future_prediction_days']
+    future_predictions = predict_future_gcn(model, scaler, X_test, n_days=n_future_days, ticker=ticker)
     pred_documents.extend(future_predictions)
     # --- End added future-prediction code ---
 

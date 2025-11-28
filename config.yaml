@@ -9,7 +9,8 @@ data_fetching:
   stock_suffix: ".NS"
   min_data_points: 50
   prediction_history_years: 5
-  max_stocks_to_fetch: 10
+  max_stocks_to_fetch: 5
+  future_prediction_days: 100
 
 models:
   lstm:
