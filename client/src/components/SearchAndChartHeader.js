@@ -22,8 +22,7 @@ const SearchAndChartHeader = () => {
   const [visibilityState, setVisibilityState] = useState({
     arima: true,
     lstm: true,
-    gcn: true,
-    boxjenkins: true
+    gcn: true
   });
 
   const handleToggleVisibility = (key, isVisible) => {

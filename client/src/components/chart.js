@@ -4,11 +4,22 @@ import { createChart } from "lightweight-charts";
 const CandlestickChart = ({ selectedName, selectedInterval, visibilityState, onToggleVisibility }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef(null);
+  const legendRef = useRef(null);
   const [candlestickData, setCandlestickData] = useState([]);
   const [lineData, setLineData] = useState([]);
   const [lineDataLSTM, setLineDataLSTM] = useState([]);
   const [lineDataGCN, setLineDataGCN] = useState([]);
   const [lineDataBoxJenkins, setLineDataBoxJenkins] = useState([]);
+  const [legendData, setLegendData] = useState({
+    time: '',
+    open: '',
+    high: '',
+    low: '',
+    close: '',
+    arima: '',
+    lstm: '',
+    gcn: ''
+  });
 
   // Store series references
   const seriesRefs = useRef({});
@@ -258,6 +269,45 @@ const CandlestickChart = ({ selectedName, selectedInterval, visibilityState, onT
     // Fit the chart to show only the data within the selected interval
     chartRef.current.timeScale().fitContent();
 
+    // Subscribe to crosshair move events
+    chartRef.current.subscribeCrosshairMove((param) => {
+      if (!param || !param.time || !param.point) {
+        setLegendData({
+          time: '',
+          open: '',
+          high: '',
+          low: '',
+          close: '',
+          arima: '',
+          lstm: '',
+          gcn: ''
+        });
+        return;
+      }
+
+      const dateStr = new Date(param.time * 1000).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+
+      const candleData = param.seriesData.get(candlestickSeries);
+      const arimaValue = param.seriesData.get(seriesRefs.current.arima);
+      const lstmValue = param.seriesData.get(seriesRefs.current.lstm);
+      const gcnValue = param.seriesData.get(seriesRefs.current.gcn);
+
+      setLegendData({
+        time: dateStr,
+        open: candleData?.open ? candleData.open.toFixed(2) : '',
+        high: candleData?.high ? candleData.high.toFixed(2) : '',
+        low: candleData?.low ? candleData.low.toFixed(2) : '',
+        close: candleData?.close ? candleData.close.toFixed(2) : '',
+        arima: arimaValue?.value ? arimaValue.value.toFixed(2) : '',
+        lstm: lstmValue?.value ? lstmValue.value.toFixed(2) : '',
+        gcn: gcnValue?.value ? gcnValue.value.toFixed(2) : ''
+      });
+    });
+
     const handleResize = () => {
       if (chartRef.current && chartContainerRef.current) {
         try {
@@ -305,8 +355,62 @@ const CandlestickChart = ({ selectedName, selectedInterval, visibilityState, onT
   }, [visibilityState]);
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       <div ref={chartContainerRef} />
+      {legendData.time && (
+        <div
+          ref={legendRef}
+          style={{
+            position: 'absolute',
+            top: '10px',
+            left: '10px',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            border: '1px solid #ccc',
+            borderRadius: '6px',
+            padding: '10px',
+            fontSize: '12px',
+            fontFamily: 'Arial, sans-serif',
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)',
+            zIndex: 1000,
+            pointerEvents: 'none'
+          }}
+        >
+          <div style={{ fontWeight: 'bold', marginBottom: '6px' }}>{legendData.time}</div>
+          {legendData.open && (
+            <div style={{ marginBottom: '4px' }}>
+              <span style={{ fontWeight: '500' }}>O: </span>
+              <span style={{ color: '#333' }}>{legendData.open}</span>
+              <span style={{ fontWeight: '500', marginLeft: '8px' }}>H: </span>
+              <span style={{ color: '#333' }}>{legendData.high}</span>
+              <span style={{ fontWeight: '500', marginLeft: '8px' }}>L: </span>
+              <span style={{ color: '#333' }}>{legendData.low}</span>
+              <span style={{ fontWeight: '500', marginLeft: '8px' }}>C: </span>
+              <span style={{ color: '#333' }}>{legendData.close}</span>
+            </div>
+          )}
+          {legendData.arima && visibilityState.arima && (
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ width: '10px', height: '10px', backgroundColor: 'orange', borderRadius: '50%', marginRight: '6px' }}></span>
+              <span style={{ fontWeight: '500' }}>ARIMA: </span>
+              <span style={{ marginLeft: '4px', color: 'orange' }}>{legendData.arima}</span>
+            </div>
+          )}
+          {legendData.lstm && visibilityState.lstm && (
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ width: '10px', height: '10px', backgroundColor: 'blue', borderRadius: '50%', marginRight: '6px' }}></span>
+              <span style={{ fontWeight: '500' }}>LSTM: </span>
+              <span style={{ marginLeft: '4px', color: 'blue' }}>{legendData.lstm}</span>
+            </div>
+          )}
+          {legendData.gcn && visibilityState.gcn && (
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ width: '10px', height: '10px', backgroundColor: 'brown', borderRadius: '50%', marginRight: '6px' }}></span>
+              <span style={{ fontWeight: '500' }}>GCN: </span>
+              <span style={{ marginLeft: '4px', color: 'brown' }}>{legendData.gcn}</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

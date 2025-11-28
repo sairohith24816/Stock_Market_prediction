@@ -9,8 +9,7 @@ const Legend = ({
   const basePredictionItems = [
     { key: 'arima', color: 'orange', label: 'ARIMA Predictions', dotSize: '12px' },
     { key: 'lstm', color: 'blue', label: 'LSTM Predictions', dotSize: '12px' },
-    { key: 'gcn', color: 'brown', label: 'GCN Predictions', dotSize: '12px' },
-    { key: 'boxjenkins', color: 'purple', label: 'Box-Jenkins Predictions', dotSize: '12px' }
+    { key: 'gcn', color: 'brown', label: 'GCN Predictions', dotSize: '12px' }
   ];
 
   // Use the same legend items for both chart types (no stock price toggle)
