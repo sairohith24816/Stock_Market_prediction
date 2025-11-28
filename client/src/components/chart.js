@@ -38,39 +38,6 @@ const CandlestickChart = ({ selectedName, selectedInterval, visibilityState, onT
     return Math.floor(date.getTime() / 1000);
   };
 
-  // Helper function to map selectedInterval label to milliseconds
-  const intervalLabelToMs = (label) => {
-    if (!label) return null;
-    const l = String(label).trim().toLowerCase();
-    if (l === '1d' || l.includes('1 day') || l.includes('1day') || l.includes('day')) return 24 * 60 * 60 * 1000;
-    if (l === '1w' || l.includes('1 week') || l.includes('1week') || l.includes('week')) return 7 * 24 * 60 * 60 * 1000;
-    if (l === '1m' || l.includes('1 month') || l.includes('1month') || l.includes('month')) return 30 * 24 * 60 * 60 * 1000; // approx 30 days
-    if (l === '1y' || l.includes('1 year') || l.includes('1year') || l.includes('year')) return 365 * 24 * 60 * 60 * 1000; // approx 365 days
-    if (l === '5y' || l.includes('5 years') || l.includes('5years')) return 5 * 365 * 24 * 60 * 60 * 1000; // approx 5 years
-    // fallback: try parse numbers like '7d' or '30d'
-    const numMatch = l.match(/(\d+)\s*(d|day|w|week|m|month|y|year)/);
-    if (numMatch) {
-      const n = parseInt(numMatch[1], 10);
-      const unit = numMatch[2];
-      if (unit.startsWith('d')) return n * 24 * 60 * 60 * 1000;
-      if (unit.startsWith('w')) return n * 7 * 24 * 60 * 60 * 1000;
-      if (unit.startsWith('m')) return n * 30 * 24 * 60 * 60 * 1000;
-      if (unit.startsWith('y')) return n * 365 * 24 * 60 * 60 * 1000;
-    }
-    return null;
-  };
-
-  // Filter a dataset to only include the most recent intervalMs milliseconds (based on that dataset's own latest timestamp)
-  const filterDataByInterval = (data, intervalMs) => {
-    if (!Array.isArray(data) || data.length === 0 || !intervalMs) return data;
-    // timestamps are in seconds
-    const times = data.map(d => d.time).filter(t => typeof t === 'number' && !isNaN(t));
-    if (times.length === 0) return data;
-    const maxTimeSec = Math.max(...times);
-    const cutoffSec = maxTimeSec - Math.floor(intervalMs / 1000);
-    return data.filter(d => d.time >= cutoffSec);
-  };
-
   // Helper function to validate and sort data
   const validateAndSortData = React.useCallback((data, dataType = 'line') => {
     if (!Array.isArray(data)) return [];
@@ -132,9 +99,7 @@ const CandlestickChart = ({ selectedName, selectedInterval, visibilityState, onT
 
         if (Array.isArray(rawData)) {
           const sortedData = validateAndSortData(rawData, 'candlestick');
-          const ms = intervalLabelToMs(selectedInterval);
-          const filtered = filterDataByInterval(sortedData, ms);
-          setCandlestickData(filtered);
+          setCandlestickData(sortedData);
         } else {
           console.error("Invalid candlestick data structure received:", rawData);
           setCandlestickData([]);
@@ -159,8 +124,6 @@ const CandlestickChart = ({ selectedName, selectedInterval, visibilityState, onT
           { url: `http://localhost:8080/get-prediction-BoxJenkins/${selectedName}`, setter: setLineDataBoxJenkins }
         ];
 
-        const ms = intervalLabelToMs(selectedInterval);
-
         const promises = endpoints.map(async ({ url, setter }) => {
           try {
             const response = await fetch(url);
@@ -168,8 +131,7 @@ const CandlestickChart = ({ selectedName, selectedInterval, visibilityState, onT
 
             if (Array.isArray(rawData)) {
               const sortedData = validateAndSortData(rawData, 'line');
-              const filtered = filterDataByInterval(sortedData, ms);
-              setter(filtered);
+              setter(sortedData);
             } else {
               console.error(`Invalid data structure from ${url}:`, rawData);
               setter([]);
@@ -209,6 +171,24 @@ const CandlestickChart = ({ selectedName, selectedInterval, visibilityState, onT
     chartRef.current = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth - 50,
       height: window.innerHeight - 230,
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: true,
+      },
+      handleScale: {
+        mouseWheel: true,
+        pinch: true,
+        axisPressedMouseMove: {
+          time: true,
+          price: true,
+        },
+        axisDoubleClickReset: {
+          time: true,
+          price: true,
+        },
+      },
     });
 
     const candlestickSeries = chartRef.current.addCandlestickSeries({
@@ -274,6 +254,9 @@ const CandlestickChart = ({ selectedName, selectedInterval, visibilityState, onT
     setSeriesData(lstmSeries, lineDataLSTM, 'LSTM');
     setSeriesData(gcnSeries, lineDataGCN, 'GCN');
     setSeriesData(boxjenkinsSeries, lineDataBoxJenkins, 'Box-Jenkins');
+
+    // Fit the chart to show only the data within the selected interval
+    chartRef.current.timeScale().fitContent();
 
     const handleResize = () => {
       if (chartRef.current && chartContainerRef.current) {

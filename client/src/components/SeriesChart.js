@@ -69,8 +69,6 @@ const SeriesChart = ({ selectedName, selectedInterval, visibilityState, onToggle
       textColor: "black",
       background: { type: "solid", color: "white" },
     },
-    width: window.innerWidth,
-    height: window.innerHeight - 100,
   }), []);
 
   // Fetch stock data (series)
@@ -132,7 +130,7 @@ const SeriesChart = ({ selectedName, selectedInterval, visibilityState, onToggle
     };
 
     fetchPredictionData();
-  }, [selectedName, validateAndSortData]); 
+  }, [selectedName, selectedInterval, validateAndSortData]); 
 
   // Create chart
   useEffect(() => {
@@ -151,7 +149,29 @@ const SeriesChart = ({ selectedName, selectedInterval, visibilityState, onToggle
       seriesRefs.current = {};
     }
 
-    const chart = createChart(chartContainerRef.current, chartOptions);
+    const chart = createChart(chartContainerRef.current, {
+      ...chartOptions,
+      width: chartContainerRef.current.clientWidth - 50,
+      height: window.innerHeight - 230,
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: true,
+      },
+      handleScale: {
+        mouseWheel: true,
+        pinch: true,
+        axisPressedMouseMove: {
+          time: true,
+          price: true,
+        },
+        axisDoubleClickReset: {
+          time: true,
+          price: true,
+        },
+      },
+    });
     chartRef.current = chart;
 
     // Create all series and store references
@@ -213,7 +233,7 @@ const SeriesChart = ({ selectedName, selectedInterval, visibilityState, onToggle
     const handleResize = () => {
       if (chartRef.current && chartContainerRef.current) {
         try {
-          chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+          chart.applyOptions({ width: chartContainerRef.current.clientWidth - 50 });
         } catch (error) {
           console.warn("Resize error (chart may be disposed):", error);
         }
