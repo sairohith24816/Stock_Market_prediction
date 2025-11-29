@@ -181,9 +181,17 @@ def generate_predictions(stock_data, ticker):
 
         last_date = stock_df.index[-1]
         future_docs = []
+        
+        # Use Business Days for future dates
+        future_dates = pd.date_range(
+            start=last_date + pd.tseries.offsets.BDay(1),
+            periods=n_days,
+            freq='B'
+        )
+        
         for i, val in enumerate(preds):
             future_docs.append({
-                'index': (last_date + timedelta(days=i + 1)).strftime("%Y-%m-%d"),
+                'index': future_dates[i].strftime("%Y-%m-%d"),
                 'close': float(val),
                 'ticker': ticker,
                 'future': True,

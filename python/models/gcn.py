@@ -149,18 +149,38 @@ def generate_predictions(stock_data, ticker):
             # inverse scale to original price space (scaler is fitted to labels in this script)
             pred_price = scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()[0]
 
-            future_date = stock_df.index[-1] + timedelta(days=(i + 1))
+            # Use Business Days for future dates
+            # We need to calculate this outside the loop or incrementally
+            # Ideally, generate the range first
+            pass
+        
+        # Generate future dates
+        last_date = stock_df.index[-1]
+        future_dates = pd.date_range(
+            start=last_date + pd.tseries.offsets.BDay(1),
+            periods=n_days,
+            freq='B'
+        )
+        
+        # Reset loop to use pre-calculated dates
+        cur_feature = torch.FloatTensor(last_scaled_feature)
+        
+        for i in range(n_days):
+             # forward pass for single node
+            with torch.no_grad():
+                pred_scaled = model(cur_feature, adj1).numpy().reshape(-1)  # shape (1,) scaled in label space
+
+            # inverse scale to original price space (scaler is fitted to labels in this script)
+            pred_price = scaler.inverse_transform(pred_scaled.reshape(-1, 1)).flatten()[0]
+            
             future_docs.append({
-                'index': future_date.strftime("%Y-%m-%d"),
+                'index': future_dates[i].strftime("%Y-%m-%d"),
                 'close': float(pred_price),
                 'ticker': ticker,
                 'future': True,
                 'MSE': mse
             })
-
-            # For a simple iterative scheme we keep the feature constant (last observed scaled open).
-            # If you prefer to change the feature each step (e.g. set next feature = predicted value),
-            # you'll need a consistent feature-scaler (not overwritten) — ask me and I can modify that.
+            
             # cur_feature remains the same here:
             cur_feature = torch.FloatTensor(last_scaled_feature)
 
