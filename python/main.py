@@ -23,88 +23,369 @@ from models import lstm, arima, gcn
 from utils.data_fetcher import fetch_and_store_stocks
 import pandas as pd
 import os
+import wandb
+from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
 
 
 def run_lstm_predictions():
-    """Run LSTM model predictions on all stock collections."""
+    """Run LSTM model predictions on all stock collections and log metrics to Weights & Biases."""
     print("Running LSTM predictions...")
     db = get_db_connection()
-    
+
+    # Initialise a single W&B run for this model over all stocks
+    wandb_cfg = config.get('wandb', {})
+    project = wandb_cfg.get('project', 'stock-market-prediction')
+    entity = wandb_cfg.get('entity')
+
+    wandb.init(
+        project=project,
+        entity=entity,
+        name=f"lstm_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        config={
+            'model': 'lstm',
+            'prediction_history_years': config['data_fetching']['prediction_history_years'],
+            'min_data_points': config['data_fetching']['min_data_points'],
+        },
+    )
+
+    metrics_table = wandb.Table(columns=[
+        "ticker",
+        "collection",
+        "mse_test",
+        "mae_test",
+        "r2_test",
+        "mse_train",
+        "n_points",
+        "n_train",
+        "n_test",
+    ])
+
     for collection_name in db.list_collection_names():
         if collection_name.endswith('_predicted'):
             continue
-            
+
         collection = db[collection_name]
         current_date = datetime.now()
         history_years = config['data_fetching']['prediction_history_years']
         start_date = current_date - timedelta(days=history_years * 365)
         query = {'index': {'$gte': start_date}}
         stock_data = list(collection.find(query))
-        
+
         if len(stock_data) < config['data_fetching']['min_data_points']:
             continue
-            
+
         pred_docs = lstm.generate_predictions(stock_data, collection_name)
         pred_collection_name = f"{collection_name}_LSTM_predicted"
         pred_collection = db[pred_collection_name]
         pred_collection.delete_many({})
         pred_collection.insert_many(pred_docs)
-    
+
+        if not pred_docs:
+            continue
+
+        # Derive train/test splits based on flags
+        train_docs = [d for d in pred_docs if d.get('type') == 'train' and not d.get('future')]
+        test_docs = [d for d in pred_docs if not d.get('future') and d.get('type') != 'train']
+
+        # Rebuild actual/pred arrays for metrics where possible
+        mse_train = None
+        mse_test = None
+        mae_test = None
+        r2_test = None
+
+        # Map index->actual close from original data
+        df_orig = pd.DataFrame(stock_data)
+        if 'index' in df_orig and 'close' in df_orig:
+            df_orig['index'] = pd.to_datetime(df_orig['index']).dt.strftime("%Y-%m-%d")
+            actual_map = df_orig.set_index('index')['close'].to_dict()
+
+            if train_docs:
+                y_train_true = []
+                y_train_pred = []
+                for d in train_docs:
+                    idx = d.get('index')
+                    if idx in actual_map:
+                        y_train_true.append(float(actual_map[idx]))
+                        y_train_pred.append(float(d.get('close', 0.0)))
+                if y_train_true:
+                    mse_train = mean_squared_error(y_train_true, y_train_pred)
+
+            if test_docs:
+                y_test_true = []
+                y_test_pred = []
+                for d in test_docs:
+                    idx = d.get('index')
+                    if idx in actual_map:
+                        y_test_true.append(float(actual_map[idx]))
+                        y_test_pred.append(float(d.get('close', 0.0)))
+                if y_test_true:
+                    mse_test = mean_squared_error(y_test_true, y_test_pred)
+                    mae_test = mean_absolute_error(y_test_true, y_test_pred)
+                    r2_test = r2_score(y_test_true, y_test_pred)
+
+        # Fallback to single stored MSE when detailed reconstruction not possible
+        sample_doc = pred_docs[-1]
+        if mse_test is None:
+            mse_test = float(sample_doc.get('MSE', 0.0))
+
+        ticker = sample_doc.get('ticker', collection_name)
+        n_points = len(pred_docs)
+        n_train = len(train_docs)
+        n_test = len(test_docs)
+
+        metrics_table.add_data(
+            ticker,
+            collection_name,
+            float(mse_test) if mse_test is not None else None,
+            float(mae_test) if mae_test is not None else None,
+            float(r2_test) if r2_test is not None else None,
+            float(mse_train) if mse_train is not None else None,
+            n_points,
+            n_train,
+            n_test,
+        )
+
+    # Log the aggregated table once per run
+    wandb.log({"lstm_stock_metrics": metrics_table})
+    wandb.finish()
+
     print("LSTM predictions completed.")
 
 
 def run_arima_predictions():
-    """Run ARIMA model predictions on all stock collections."""
+    """Run ARIMA model predictions on all stock collections and log metrics to Weights & Biases."""
     print("Running ARIMA predictions...")
     db = get_db_connection()
-    
+
+    wandb_cfg = config.get('wandb', {})
+    project = wandb_cfg.get('project', 'stock-market-prediction')
+    entity = wandb_cfg.get('entity')
+
+    wandb.init(
+        project=project,
+        entity=entity,
+        name=f"arima_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        config={
+            'model': 'arima',
+            'prediction_history_years': config['data_fetching']['prediction_history_years'],
+            'min_data_points': config['data_fetching']['min_data_points'],
+        },
+    )
+
+    metrics_table = wandb.Table(columns=[
+        "ticker",
+        "collection",
+        "mse_test",
+        "mae_test",
+        "r2_test",
+        "mse_train",
+        "n_points",
+        "n_train",
+        "n_test",
+    ])
+
     for collection_name in db.list_collection_names():
         if collection_name.endswith('_predicted'):
             continue
-            
+
         collection = db[collection_name]
         current_date = datetime.now()
         history_years = config['data_fetching']['prediction_history_years']
         start_date = current_date - timedelta(days=history_years * 365)
         query = {'index': {'$gte': start_date}}
         stock_data = list(collection.find(query))
-        
+
         if len(stock_data) < config['data_fetching']['min_data_points']:
             continue
-            
+
         pred_docs = arima.generate_predictions(stock_data, collection_name)
         pred_collection_name = f"{collection_name}_ARIMA_predicted"
         pred_collection = db[pred_collection_name]
         pred_collection.delete_many({})
         pred_collection.insert_many(pred_docs)
-    
+
+        if not pred_docs:
+            continue
+
+        train_docs = [d for d in pred_docs if d.get('type') == 'train' and not d.get('future')]
+        test_docs = [d for d in pred_docs if not d.get('future') and d.get('type') != 'train']
+
+        mse_train = None
+        mse_test = None
+        mae_test = None
+        r2_test = None
+
+        df_orig = pd.DataFrame(stock_data)
+        if 'index' in df_orig and 'close' in df_orig:
+            df_orig['index'] = pd.to_datetime(df_orig['index']).dt.strftime("%Y-%m-%d")
+            actual_map = df_orig.set_index('index')['close'].to_dict()
+
+            if train_docs:
+                y_train_true = []
+                y_train_pred = []
+                for d in train_docs:
+                    idx = d.get('index')
+                    if idx in actual_map:
+                        y_train_true.append(float(actual_map[idx]))
+                        y_train_pred.append(float(d.get('close', 0.0)))
+                if y_train_true:
+                    mse_train = mean_squared_error(y_train_true, y_train_pred)
+
+            if test_docs:
+                y_test_true = []
+                y_test_pred = []
+                for d in test_docs:
+                    idx = d.get('index')
+                    if idx in actual_map:
+                        y_test_true.append(float(actual_map[idx]))
+                        y_test_pred.append(float(d.get('close', 0.0)))
+                if y_test_true:
+                    mse_test = mean_squared_error(y_test_true, y_test_pred)
+                    mae_test = mean_absolute_error(y_test_true, y_test_pred)
+                    r2_test = r2_score(y_test_true, y_test_pred)
+
+        sample_doc = pred_docs[-1]
+        if mse_test is None:
+            mse_test = float(sample_doc.get('MSE', 0.0))
+
+        ticker = sample_doc.get('ticker', collection_name)
+        n_points = len(pred_docs)
+        n_train = len(train_docs)
+        n_test = len(test_docs)
+
+        metrics_table.add_data(
+            ticker,
+            collection_name,
+            float(mse_test) if mse_test is not None else None,
+            float(mae_test) if mae_test is not None else None,
+            float(r2_test) if r2_test is not None else None,
+            float(mse_train) if mse_train is not None else None,
+            n_points,
+            n_train,
+            n_test,
+        )
+
+    wandb.log({"arima_stock_metrics": metrics_table})
+    wandb.finish()
+
     print("ARIMA predictions completed.")
 
 
 def run_gcn_predictions():
-    """Run GCN model predictions on all stock collections."""
+    """Run GCN model predictions on all stock collections and log metrics to Weights & Biases."""
     print("Running GCN predictions...")
     db = get_db_connection()
-    
+
+    wandb_cfg = config.get('wandb', {})
+    project = wandb_cfg.get('project', 'stock-market-prediction')
+    entity = wandb_cfg.get('entity')
+
+    wandb.init(
+        project=project,
+        entity=entity,
+        name=f"gcn_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        config={
+            'model': 'gcn',
+            'prediction_history_years': config['data_fetching']['prediction_history_years'],
+            'min_data_points': config['data_fetching']['min_data_points'],
+        },
+    )
+
+    metrics_table = wandb.Table(columns=[
+        "ticker",
+        "collection",
+        "mse_test",
+        "mae_test",
+        "r2_test",
+        "mse_train",
+        "n_points",
+        "n_train",
+        "n_test",
+    ])
+
     for collection_name in db.list_collection_names():
         if collection_name.endswith('_predicted'):
             continue
-            
+
         collection = db[collection_name]
         current_date = datetime.now()
         history_years = config['data_fetching']['prediction_history_years']
         start_date = current_date - timedelta(days=history_years * 365)
         stock_data = list(collection.find({'index': {'$gte': start_date}}))
-        
+
         if len(stock_data) < config['data_fetching']['min_data_points']:
             continue
-            
+
         pred_docs = gcn.generate_predictions(stock_data, collection_name)
         pred_collection_name = f"{collection_name}_GCN_predicted"
         pred_collection = db[pred_collection_name]
         pred_collection.delete_many({})
         pred_collection.insert_many(pred_docs)
-    
+
+        if not pred_docs:
+            continue
+
+        train_docs = [d for d in pred_docs if d.get('type') == 'train' and not d.get('future')]
+        test_docs = [d for d in pred_docs if not d.get('future') and d.get('type') != 'train']
+
+        mse_train = None
+        mse_test = None
+        mae_test = None
+        r2_test = None
+
+        df_orig = pd.DataFrame(stock_data)
+        if 'index' in df_orig and 'close' in df_orig:
+            df_orig['index'] = pd.to_datetime(df_orig['index']).dt.strftime("%Y-%m-%d")
+            actual_map = df_orig.set_index('index')['close'].to_dict()
+
+            if train_docs:
+                y_train_true = []
+                y_train_pred = []
+                for d in train_docs:
+                    idx = d.get('index')
+                    if idx in actual_map:
+                        y_train_true.append(float(actual_map[idx]))
+                        y_train_pred.append(float(d.get('close', 0.0)))
+                if y_train_true:
+                    mse_train = mean_squared_error(y_train_true, y_train_pred)
+
+            if test_docs:
+                y_test_true = []
+                y_test_pred = []
+                for d in test_docs:
+                    idx = d.get('index')
+                    if idx in actual_map:
+                        y_test_true.append(float(actual_map[idx]))
+                        y_test_pred.append(float(d.get('close', 0.0)))
+                if y_test_true:
+                    mse_test = mean_squared_error(y_test_true, y_test_pred)
+                    mae_test = mean_absolute_error(y_test_true, y_test_pred)
+                    r2_test = r2_score(y_test_true, y_test_pred)
+
+        sample_doc = pred_docs[-1]
+        if mse_test is None:
+            mse_test = float(sample_doc.get('MSE', 0.0))
+
+        ticker = sample_doc.get('ticker', collection_name)
+        n_points = len(pred_docs)
+        n_train = len(train_docs)
+        n_test = len(test_docs)
+
+        metrics_table.add_data(
+            ticker,
+            collection_name,
+            float(mse_test) if mse_test is not None else None,
+            float(mae_test) if mae_test is not None else None,
+            float(r2_test) if r2_test is not None else None,
+            float(mse_train) if mse_train is not None else None,
+            n_points,
+            n_train,
+            n_test,
+        )
+
+    wandb.log({"gcn_stock_metrics": metrics_table})
+    wandb.finish()
+
     print("GCN predictions completed.")
 
 

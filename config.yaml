@@ -30,3 +30,6 @@ models:
     learning_rate: 0.1
     hidden_dim: 64
     test_split: 0.2
+
+wandb:
+  project: "stock-market-prediction"
