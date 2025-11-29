@@ -253,25 +253,25 @@ const CandlestickChart = ({ selectedName, selectedInterval, visibilityState, onT
     const arimaSeries = chartRef.current.addLineSeries({
       color: 'orange',
       lineWidth: 2,
-      title: 'ARIMA',
-      visible: visibilityState.arima
+      visible: visibilityState.arima,
+      lastValueVisible: false
     });
     const lstmSeries = chartRef.current.addLineSeries({
       color: 'blue',
       lineWidth: 2,
-      title: 'LSTM',
-      visible: visibilityState.lstm
+      visible: visibilityState.lstm,
+      lastValueVisible: false
     });
     const gcnSeries = chartRef.current.addLineSeries({
       color: 'brown',
       lineWidth: 2,
-      title: 'GCN',
-      visible: visibilityState.gcn
+      visible: visibilityState.gcn,
+      lastValueVisible: false
     });
     const boxjenkinsSeries = chartRef.current.addLineSeries({
       color: 'purple',
       lineWidth: 2,
-      title: 'Box-Jenkins'
+      lastValueVisible: false
     });
 
     // Store series references

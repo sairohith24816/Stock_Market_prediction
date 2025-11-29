@@ -216,30 +216,30 @@ const SeriesChart = ({ selectedName, selectedInterval, visibilityState, onToggle
     const stockPriceSeries = chart.addLineSeries({ 
       color: "green", 
       lineWidth: 2,
-      title: 'Stock Price'
+      lastValueVisible: false
     });
     const arimaSeries = chart.addLineSeries({ 
       color: 'orange', 
       lineWidth: 3,
-      title: 'ARIMA',
-      visible: visibilityState.arima
+      visible: visibilityState.arima,
+      lastValueVisible: false
     });
     const lstmSeries = chart.addLineSeries({ 
       color: 'blue', 
       lineWidth: 3,
-      title: 'LSTM',
-      visible: visibilityState.lstm
+      visible: visibilityState.lstm,
+      lastValueVisible: false
     });
     const gcnSeries = chart.addLineSeries({ 
       color: 'brown', 
       lineWidth: 3,
-      title: 'GCN',
-      visible: visibilityState.gcn
+      visible: visibilityState.gcn,
+      lastValueVisible: false
     });
     const boxjenkinsSeries = chart.addLineSeries({ 
       color: 'purple', 
       lineWidth: 3,
-      title: 'Box-Jenkins'
+      lastValueVisible: false
     });
 
     // Store series references (only for prediction lines, not stock price)
